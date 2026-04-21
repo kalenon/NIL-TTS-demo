@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NIL-TTS Noise Demo</title>
+  <meta name="description" content="NIL-TTS demo page with prompt and 6/0/-6 dB clean/noisy samples." />
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: Arial, "Helvetica Neue", Helvetica, sans-serif;
+      line-height: 1.6;
+      color: #222;
+      background: #fff;
+    }
+    .container {
+      max-width: 1280px;
+      margin: 0 auto;
+      padding: 24px 16px 56px;
+    }
+    h1, h2, h3 {
+      margin-top: 0;
+      color: #111;
+    }
+    h1 {
+      font-size: 30px;
+      margin-bottom: 8px;
+    }
+    h2 {
+      font-size: 24px;
+      margin-top: 32px;
+      margin-bottom: 12px;
+      border-bottom: 1px solid #ddd;
+      padding-bottom: 6px;
+    }
+    h3 {
+      margin-top: 28px;
+      margin-bottom: 8px;
+      font-size: 18px;
+    }
+    p {
+      margin: 8px 0;
+    }
+    ul {
+      margin-top: 4px;
+    }
+    a {
+      color: #1a5fb4;
+      text-decoration: none;
+    }
+    a:hover {
+      text-decoration: underline;
+    }
+    .subtitle {
+      color: #555;
+      margin-bottom: 10px;
+    }
+    .meta {
+      margin-bottom: 18px;
+    }
+    .table-wrap {
+      width: 100%;
+      overflow-x: auto;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 8px 0 18px;
+      table-layout: fixed;
+    }
+    th, td {
+      border: 1px solid #ddd;
+      padding: 8px;
+      vertical-align: top;
+      font-size: 14px;
+    }
+    th {
+      background: #f6f6f6;
+      text-align: left;
+      font-weight: 600;
+    }
+    .col-text { width: 260px; }
+    .col-audio { width: 200px; }
+    .col-snr { width: 210px; }
+    audio {
+      width: 100%;
+    }
+    .text-box {
+      background: #fafafa;
+      border: 1px solid #e6e6e6;
+      border-radius: 6px;
+      padding: 10px;
+      margin: 6px 0;
+      font-size: 14px;
+    }
+    .text-box {
+      word-break: break-word;
+      white-space: normal;
+    }
+    .audio-block {
+      margin-bottom: 10px;
+    }
+    .audio-title {
+      font-size: 13px;
+      color: #444;
+      margin-bottom: 4px;
+    }
+    .note {
+      font-size: 13px;
+      color: #666;
+      margin-top: 18px;
+    }
+    .footer {
+      margin-top: 32px;
+      font-size: 13px;
+      color: #666;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>NIL-TTS: Noise Demo Page</h1>
+    <!-- <p class="subtitle">每条样本展示：Prompt（文本+音频）→ Gen Text → 在 6 / 0 / -6 dB 下的 clean 与 noisy 音频。</p> -->
+    <p class="subtitle">Sample display: Prompt (text + audio) → Generated text → Clean and noisy audio at 6 / 0 / -6 dB.</p>
+
+    <p class="meta">
+      <strong>Links:</strong>
+      <a href="https://arxiv.org/abs/xxxx.xxxxx" target="_blank" rel="noopener">Paper</a>
+      ·
+      <a href="https://github.com/kalenon/NIL-TTS-demo" target="_blank" rel="noopener">Code</a>
+    </p>
+
+    <h2 id="noise">Samples</h2>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th class="col-text">Prompt Text</th>
+            <th class="col-text">Gen Text</th>
+            <th class="col-audio">Prompt Audio</th>
+            <th class="col-audio">Noise</th>
+            <th class="col-snr">6 dB (clean / noisy)</th>
+            <th class="col-snr">0 dB (clean / noisy)</th>
+            <th class="col-snr">-6 dB (clean / noisy)</th>
+          </tr>
+        </thead>
+        <tbody id="samples-body">
+          <tr>
+            <td colspan="7">正在加载 <code>demo_manifest.csv</code> ...</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- <p class="note">注：页面会自动读取 <code>src/f5_tts/infer/demo/selection_templates/demo_manifest.csv</code>。修改 CSV 后刷新页面即可更新。</p> -->
+
+    <p class="footer">© 2026 NIL-TTS Demo</p>
+  </div>
+
+  <script>
+    const MANIFEST_PATH = "demo_manifest.csv";
+
+    function parseCSV(text) {
+      const rows = [];
+      let row = [];
+      let cell = "";
+      let inQuotes = false;
+
+      for (let i = 0; i < text.length; i++) {
+        const ch = text[i];
+        const next = text[i + 1];
+
+        if (ch === '"') {
+          if (inQuotes && next === '"') {
+            cell += '"';
+            i++;
+          } else {
+            inQuotes = !inQuotes;
+          }
+          continue;
+        }
+
+        if (ch === ',' && !inQuotes) {
+          row.push(cell);
+          cell = "";
+          continue;
+        }
+
+        if ((ch === '\n' || ch === '\r') && !inQuotes) {
+          if (ch === '\r' && next === '\n') i++;
+          row.push(cell);
+          rows.push(row);
+          row = [];
+          cell = "";
+          continue;
+        }
+
+        cell += ch;
+      }
+
+      if (cell.length || row.length) {
+        row.push(cell);
+        rows.push(row);
+      }
+
+      return rows;
+    }
+
+    function escapeHTML(str) {
+      return (str || "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+    }
+
+    function audioPair(cleanSrc, noisySrc) {
+      return `
+        <div class="audio-block">
+          <div class="audio-title">clean</div>
+          <audio controls preload="none" src="${escapeHTML(cleanSrc)}"></audio>
+        </div>
+        <div class="audio-block">
+          <div class="audio-title">noisy</div>
+          <audio controls preload="none" src="${escapeHTML(noisySrc)}"></audio>
+        </div>
+      `;
+    }
+
+    function renderTextCell(text) {
+      const safeText = escapeHTML(text || "");
+      return `<div class="text-box">${safeText}</div>`;
+    }
+
+    async function loadManifestAndRender() {
+      const tbody = document.getElementById("samples-body");
+      try {
+        const res = await fetch(MANIFEST_PATH, { cache: "no-store" });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+        const csvText = await res.text();
+        const rows = parseCSV(csvText).filter(r => r.some(c => (c || "").trim() !== ""));
+        if (rows.length < 2) {
+          tbody.innerHTML = `<tr><td colspan="7">CSV 为空或仅有表头。</td></tr>`;
+          return;
+        }
+
+        const headers = rows[0].map(h => h.trim());
+        const idx = Object.fromEntries(headers.map((h, i) => [h, i]));
+
+        const required = [
+          "demo_id", "enabled", "ref_text", "gen_text", "ref_audio_path", "noise_path",
+          "snr_pos6_clean", "snr_pos6_noisy", "snr_0_clean", "snr_0_noisy", "snr_neg6_clean", "snr_neg6_noisy"
+        ];
+        for (const k of required) {
+          if (!(k in idx)) {
+            tbody.innerHTML = `<tr><td colspan="7">CSV 缺少必要字段：<code>${escapeHTML(k)}</code></td></tr>`;
+            return;
+          }
+        }
+
+        const dataRows = rows.slice(1).filter(r => {
+          const enabled = (r[idx.enabled] || "").trim();
+          return enabled === "1" || enabled.toLowerCase() === "true";
+        });
+
+        if (!dataRows.length) {
+          tbody.innerHTML = `<tr><td colspan="7">没有可展示样本（enabled=1）。</td></tr>`;
+          return;
+        }
+
+        tbody.innerHTML = dataRows.map(r => {
+          const refText = r[idx.ref_text] || "";
+          const genText = r[idx.gen_text] || "";
+
+          const refAudio = escapeHTML(r[idx.ref_audio_path] || "");
+          const noiseAudio = escapeHTML(r[idx.noise_path] || "");
+
+          const pos6Clean = r[idx.snr_pos6_clean] || "";
+          const pos6Noisy = r[idx.snr_pos6_noisy] || "";
+          const snr0Clean = r[idx.snr_0_clean] || "";
+          const snr0Noisy = r[idx.snr_0_noisy] || "";
+          const neg6Clean = r[idx.snr_neg6_clean] || "";
+          const neg6Noisy = r[idx.snr_neg6_noisy] || "";
+
+          return `
+            <tr>
+              <td>${renderTextCell(refText)}</td>
+              <td>${renderTextCell(genText)}</td>
+              <td><audio controls preload="none" src="${refAudio}"></audio></td>
+              <td><audio controls preload="none" src="${noiseAudio}"></audio></td>
+              <td>${audioPair(pos6Clean, pos6Noisy)}</td>
+              <td>${audioPair(snr0Clean, snr0Noisy)}</td>
+              <td>${audioPair(neg6Clean, neg6Noisy)}</td>
+            </tr>
+          `;
+        }).join("");
+      } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="7">加载 CSV 失败：${escapeHTML(String(err))}<br/>请通过本地/远程 HTTP 服务访问页面（不要直接双击 file:// 打开）。</td></tr>`;
+      }
+    }
+
+    loadManifestAndRender();
+  </script>
+</body>
+</html>
